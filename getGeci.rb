@@ -54,7 +54,7 @@ class Getlrc
       open(uri) do |http|
         html_response = http.read
       end
-      sleep 2
+      # sleep 1
       totalpage = JSON.parse(html_response)["totalPage"]
 
       # 根据总页数 每页读取歌曲id
@@ -64,7 +64,7 @@ class Getlrc
         open(url) do |http|
           html_response = http.read
         end
-        sleep 2
+        # sleep 1
         page = page + 1
         # http://www.kuwo.cn/yinyue/40079875
         allSongId = JSON.parse(html_response)["data"]
@@ -72,6 +72,7 @@ class Getlrc
           url = "http://www.kuwo.cn/yinyue/#{item["rid"]}"
           puts url
           puts '解析歌词...'
+          # 获取歌词
           getOneLyc(url)
         end
       end
@@ -86,14 +87,17 @@ class Getlrc
     parseHtml(url)
     # 把 @data 插入数据库
     insert
-    sleep 2
+    # sleep 1
   end
   # 解析内容
   # url       :   链接地址
   # classname :   类名
   def parseHtml(url)
+    @data = {}
     html  =  RestClient.get(url).body
     doc   =  Nokogiri::HTML.parse(html)
+    # 注意：： 没有获取到歌词 退出  有些页面没有歌词 以及版权问题 不显示歌词
+    return if doc.css('.lrcItem').empty?
     _lrcname    = doc.xpath('//*[@id="lrcName"]').text
     _album      = doc.xpath('//*[@id="musiclrc"]/div[1]/p[1]/span/a').text
     _albumLink  = doc.xpath('//*[@id="musiclrc"]/div[1]/p[1]/span/a').attr('href')
@@ -104,7 +108,6 @@ class Getlrc
       @nowarray.push(lyctxt.text)
     end
     # 转成字符串存入数据库
-    @data = {}
     @data["_lrcname"] = _lrcname
     @data["_album"] = _album
     @data["_albumLink"] = _albumLink.text
@@ -114,17 +117,35 @@ class Getlrc
   end
   # 插入数据库
   def insert
-    SQLite3::Database.new("lyc.db") do |db|
-      db.execute("INSERT INTO lyc ( lycname , album , albumLink , artist , artistLink , lyccontent ) VALUES ('#{@data["_lrcname"]}' , '#{@data["_album"]}' , '#{@data["_albumLink"]}' , '#{@data["_artist"]}' , '#{@data["_artistLink"]}', '#{@data["_lyccontent"]}')")
-      db.close
+    # puts "歌词文字数量#{@data["_lyccontent"].length}"
+    # 没有歌词的时候就不存入数据库
+    if @data.has_key?("_lyccontent") then
+      if @data["_lyccontent"].length == 0 then
+        puts "没有具体文字内容"
+        return
+      else
+        puts "有内容存入数据库"
+        SQLite3::Database.new("lyc.db") do |db|
+          db.execute("INSERT INTO lyc ( lycname , album , albumLink , artist , artistLink , lyccontent ) VALUES ('#{@data["_lrcname"]}' , '#{@data["_album"]}' , '#{@data["_albumLink"]}' , '#{@data["_artist"]}' , '#{@data["_artistLink"]}', '#{@data["_lyccontent"]}')")
+          db.close
+        end
+      end
+    else
+      return
+      puts "data没有内容"
     end
+    # SQLite3::Database.new("lyc.db") do |db|
+    #   db.execute("INSERT INTO lyc ( lycname , album , albumLink , artist , artistLink , lyccontent ) VALUES ('#{@data["_lrcname"]}' , '#{@data["_album"]}' , '#{@data["_albumLink"]}' , '#{@data["_artist"]}' , '#{@data["_artistLink"]}', '#{@data["_lyccontent"]}')")
+    #   db.close
+    # end
   end
 end
 
 # run = Getlrc.new("http://www.kuwo.cn/geci/artist_a.htm")
 # puts run.nowarray
+# 还差一个 qita 分类没有下载 用run = Getlrc.new("http://www.kuwo.cn/geci/artist_qita.htm")
 "abcdefghijklmnopqrstuvwxyz".each_char do |item|
-  puts " -------------------#{item}组开始------------------------------ "
+  puts " -----#{item}组开始------- "
   run = Getlrc.new("http://www.kuwo.cn/geci/artist_#{item}.htm")
-  sleep 3
+
 end
