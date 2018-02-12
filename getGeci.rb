@@ -7,9 +7,12 @@ require 'json'
 
 class Getlrc
 
-  def initialize(url)
+  # url 字母链接
+  # database 字母(和数据库名字相关)： a b c ...
+  def initialize(url,database)
     @nowarray  = []
     @manListId = []
+    @database = database
     getManPage(url)
     getSong(url)
   end
@@ -124,28 +127,30 @@ class Getlrc
         puts "没有具体文字内容"
         return
       else
+
+        # 根据@database的名字不同 存入不同的数据库
         puts "有内容存入数据库"
-        SQLite3::Database.new("lyc.db") do |db|
+        SQLite3::Database.new("#{@database}.db") do |db|
           db.execute("INSERT INTO lyc ( lycname , album , albumLink , artist , artistLink , lyccontent ) VALUES ('#{@data["_lrcname"]}' , '#{@data["_album"]}' , '#{@data["_albumLink"]}' , '#{@data["_artist"]}' , '#{@data["_artistLink"]}', '#{@data["_lyccontent"]}')")
           db.close
+
+
         end
       end
     else
       return
       puts "data没有内容"
     end
-    # SQLite3::Database.new("lyc.db") do |db|
-    #   db.execute("INSERT INTO lyc ( lycname , album , albumLink , artist , artistLink , lyccontent ) VALUES ('#{@data["_lrcname"]}' , '#{@data["_album"]}' , '#{@data["_albumLink"]}' , '#{@data["_artist"]}' , '#{@data["_artistLink"]}', '#{@data["_lyccontent"]}')")
-    #   db.close
-    # end
+
   end
 end
 
 # run = Getlrc.new("http://www.kuwo.cn/geci/artist_a.htm")
 # puts run.nowarray
 # 还差一个 qita 分类没有下载 用run = Getlrc.new("http://www.kuwo.cn/geci/artist_qita.htm")
+
+# 根据不同的字母 存入不同的数据库
 "abcdefghijklmnopqrstuvwxyz".each_char do |item|
   puts " -----#{item}组开始------- "
-  run = Getlrc.new("http://www.kuwo.cn/geci/artist_#{item}.htm")
-
+  run = Getlrc.new("http://www.kuwo.cn/geci/artist_#{item}.htm",item)
 end
