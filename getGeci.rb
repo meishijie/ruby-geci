@@ -4,6 +4,7 @@ require 'open-uri'
 require 'rest-client'
 require 'sqlite3'
 require 'json'
+require 'timeout'
 
 class Getlrc
 
@@ -22,8 +23,13 @@ class Getlrc
     # 获取a b c d等
     urlId = url[31..url.length-5]
     # 获取所有manlist 放入数组
-    html      =  RestClient.get(url).body
-    doc       =  Nokogiri::HTML.parse(html)
+    begin
+      html  =  RestClient.get(url).body
+    rescue
+      retry
+    end
+
+    doc  =  Nokogiri::HTML.parse(html)
     _lastPageUrl = doc.xpath('//*[@id="pageDiv"]/a[7]').attr('href').text
     _lastPageNum = _lastPageUrl[15..._lastPageUrl.length-4].to_i
     # 如果是其他 范围变小
@@ -38,7 +44,11 @@ class Getlrc
   end
   def getManList(url)
     # 获取所有歌手id  放入数组
-    html  =  RestClient.get(url).body
+    begin
+      html  =  RestClient.get(url).body
+    rescue
+      retry
+    end
     doc   =  Nokogiri::HTML.parse(html)
     doc.css('.songer_list > li').each do |li|
       str = li.>('a').attr('href').text
@@ -54,31 +64,46 @@ class Getlrc
       # 获取歌手的总页数
       uri = "http://www.kuwo.cn/geci/wb/getJsonData?type=artSong&artistId=#{manurl}&page=1"
       html_response = nil
-      open(uri) do |http|
-        html_response = http.read
-      end
-      # sleep 1
-      totalpage = JSON.parse(html_response)["totalPage"]
-
-      # 根据总页数 每页读取歌曲id
-      page = 1
-      while page <= totalpage do
-        url = "http://www.kuwo.cn/geci/wb/getJsonData?type=artSong&artistId=#{manurl}&page=#{page}"
-        open(url) do |http|
+      # 处理超时异常 重新连接
+      begin
+        open(uri) do |http|
           html_response = http.read
         end
-        # sleep 1
-        page = page + 1
-        # http://www.kuwo.cn/yinyue/40079875
-        allSongId = JSON.parse(html_response)["data"]
-        allSongId.each do |item|
-          url = "http://www.kuwo.cn/yinyue/#{item["rid"]}"
-          puts url
-          puts '解析歌词...'
-          # 获取歌词
+      rescue
+        puts '超时 重新连接'
+        retry
+      end
+
+      totalpage = /totalPage":[\d]+/.match(html_response).to_s.delete('totalPage":')
+      #
+      page = 1
+      while page <= totalpage.to_i do
+        uri = "http://www.kuwo.cn/geci/wb/getJsonData?type=artSong&artistId=#{manurl}&page=#{page}"
+        html_response = nil
+
+        # 处理超时异常
+        begin
+          open(uri) do |http|
+            html_response = http.read
+          end
+        rescue
+          puts '超时 重新连接'
+          retry
+        end
+
+        allSongUrl = html_response.scan(/rid":"[\d]+/) #/rid":"[\d]+"/.match(html_response)
+        allSongUrl = allSongUrl.map do |item|
+          item.delete('rid":"')
+        end
+        allSongUrl.each do |item|
+          url = "http://www.kuwo.cn/yinyue/#{item}"
           getOneLyc(url)
         end
+        puts "totalpage #{totalpage}"
+        puts "curruntPage #{page}"
+        page = page + 1
       end
+
     end
     #
   end
@@ -92,12 +117,23 @@ class Getlrc
     insert
     # sleep 1
   end
+
+
   # 解析内容
   # url       :   链接地址
   # classname :   类名
   def parseHtml(url)
     @data = {}
-    html  =  RestClient.get(url).body
+    @nowarray = []
+    @url = url
+    begin
+      html  =  RestClient::Request.execute(method: :get, url: url, timeout: 60).body
+    rescue
+      puts '连接超时 重试'
+      retry
+    end
+
+    # puts html
     doc   =  Nokogiri::HTML.parse(html)
     # 注意：： 没有获取到歌词 退出  有些页面没有歌词 以及版权问题 不显示歌词
     return if doc.css('.lrcItem').empty?
@@ -116,33 +152,32 @@ class Getlrc
     @data["_albumLink"] = _albumLink.text
     @data["_artist"] = _artist
     @data["_artistLink"] = _artistLink.text
-    @data["_lyccontent"] = @nowarray.join('|').delete("'") #注意内容中的单引号符号
+    @data["_lyccontent"] = @nowarray.join('|')
+    #注意内容中的单引号等符号
+    @data["_lyccontent"] = @data["_lyccontent"].gsub(/['"\\\*&.?!,…:;]/, '')
   end
   # 插入数据库
   def insert
-    # puts "歌词文字数量#{@data["_lyccontent"].length}"
     # 没有歌词的时候就不存入数据库
     if @data.has_key?("_lyccontent") then
-      if @data["_lyccontent"].length == 0 then
-        puts "没有具体文字内容"
+      if @data["_lyccontent"].length < 20 then
+        puts "#{@url}没有具体文字内容"
         return
       else
-
+        #注意内容中的单引号等符号
+        lydata = @data["_lyccontent"].gsub(/['"\\\*&.?!,…:;]/, '')
         # 根据@database的名字不同 存入不同的数据库
-        puts "有内容存入数据库"
         SQLite3::Database.new("#{@database}.db") do |db|
-          db.execute("INSERT INTO lyc ( lycname , album , albumLink , artist , artistLink , lyccontent ) VALUES ('#{@data["_lrcname"]}' , '#{@data["_album"]}' , '#{@data["_albumLink"]}' , '#{@data["_artist"]}' , '#{@data["_artistLink"]}', '#{@data["_lyccontent"]}')")
+          db.execute("INSERT INTO lyc ( lycname , album , albumLink , artist , artistLink , lyccontent ) VALUES ('#{@data["_lrcname"]}' , '#{@data["_album"]}' , '#{@data["_albumLink"]}' , '#{@data["_artist"]}' , '#{@data["_artistLink"]}', '#{lydata}')")
           db.close
-
-
         end
       end
     else
+      # puts @data["_lyccontent"]
       return
-      puts "data没有内容"
     end
-
   end
+
 end
 
 # run = Getlrc.new("http://www.kuwo.cn/geci/artist_a.htm")
@@ -150,7 +185,7 @@ end
 # 还差一个 qita 分类没有下载 用run = Getlrc.new("http://www.kuwo.cn/geci/artist_qita.htm")
 
 # 根据不同的字母 存入不同的数据库
-"abcdefghijklmnopqrstuvwxyz".each_char do |item|
+"cd".each_char do |item|
   puts " -----#{item}组开始------- "
-  run = Getlrc.new("http://www.kuwo.cn/geci/artist_#{item}.htm",item)
+  Getlrc.new("http://www.kuwo.cn/geci/artist_#{item}.htm",item)
 end

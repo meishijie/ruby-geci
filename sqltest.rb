@@ -37,4 +37,5 @@ def parseHtml(url)
 	@data["_lyccontent"] = @nowarray.join('|').delete("'") #注意内容中的单引号符号
 end
 
-parseHtml('http://www.kuwo.cn/yinyue/11589312')
+# parseHtml('http://www.kuwo.cn/yinyue/11589312')
+puts 'html_r""esponse'.gsub('""','"')
