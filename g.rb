@@ -185,7 +185,7 @@ end
 # 还差一个 qita 分类没有下载 用run = Getlrc.new("http://www.kuwo.cn/geci/artist_qita.htm")
 
 # 根据不同的字母 存入不同的数据库
-"e".each_char do |item|
+"g".each_char do |item|
   puts " -----#{item}组开始------- "
   Getlrc.new("http://www.kuwo.cn/geci/artist_#{item}.htm",item)
 end
