@@ -7,7 +7,7 @@ import sqlite3
 # 删除重复数据
 # --DELETE FROM lyc WHERE rowid NOT IN(SELECT Max(rowid) rowid FROM lyc GROUP BY lycname)
 # VACUUM
-conn = sqlite3.connect('e.db')
+conn = sqlite3.connect('a.db')
 c = conn.cursor()
 c.execute("DELETE FROM lyc WHERE rowid NOT IN(SELECT Max(rowid) rowid FROM lyc GROUP BY lycname)")
 conn.execute("VACUUM")
