@@ -5,37 +5,33 @@ require 'rest-client'
 require 'sqlite3'
 require 'json'
 require 'timeout'
-
+require 'enumerator'
 
 
   # url 字母链接
   # database 字母(和数据库名字相关)： a b c ...
   
     @nowarray  = []
-    @manListId = []
+    @alllist = []
     @database = 1
     $queue = []
-    10.times do |i|
-      $queue.push(i)
+    28.times.each_slice(3) do |i|
+      @alllist<<i
     end
-    
-    # puts $queue
-    #开辟的线程数
-    threadNums = 2
-    threadNums.times do |i|
-      t = Thread.new do
-        
-        until $queue.empty?
-          xid = $queue.pop()
-          puts xid
+    @alllist.each do |lists|
+      puts "#{lists}--"
+      $queue = lists
+      puts "#{$queue}--"
+      $queue.each do |i|
+        # puts Thread.list.length()
+        @nowarray<< Thread.new do
+            xid = $queue.pop()
         end
       end
-      t.join
+      @nowarray.each do |t|
+        t.join
+      end
     end
-    
-
-  
-
  
   def insert    
         
