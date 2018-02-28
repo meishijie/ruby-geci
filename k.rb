@@ -91,13 +91,30 @@ class Getlrc
           retry
         end
 
+
         allSongUrl = html_response.scan(/rid":"[\d]+/) #/rid":"[\d]+"/.match(html_response)
         allSongUrl = allSongUrl.map do |item|
           item.delete('rid":"')
         end
-        allSongUrl.each do |item|
-          url = "http://www.kuwo.cn/yinyue/#{item}"
-          getOneLyc(url)
+        # 平均分割成不同的份数的多线程
+        _t = 5
+        alltempsongarray = []
+        allSongUrl.each_slice(_t) do |i|
+          puts "--#{i}--"
+          alltempsongarray<<i
+        end
+        alltempsongarray.each do |item|
+          thread = []
+          item.each do |i|
+            thread<< Thread.new do
+                url = "http://www.kuwo.cn/yinyue/#{i}"
+                puts url
+                getOneLyc(url)  
+            end
+          end
+          thread.each do |t|
+            t.join
+          end
         end
         puts "totalpage #{totalpage}"
         puts "curruntPage #{page}"
@@ -185,7 +202,7 @@ end
 # 还差一个 qita 分类没有下载 用run = Getlrc.new("http://www.kuwo.cn/geci/artist_qita.htm")
 
 # 根据不同的字母 存入不同的数据库
-"k".each_char do |item|
+"z".each_char do |item|
   puts " -----#{item}组开始------- "
   Getlrc.new("http://www.kuwo.cn/geci/artist_#{item}.htm",item)
 end
