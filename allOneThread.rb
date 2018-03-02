@@ -7,7 +7,6 @@ require 'json'
 require 'timeout'
 
 class Getlrc
-
   # url 字母链接
   # database 字母(和数据库名字相关)： a b c ...
   def initialize(url,database)
@@ -17,7 +16,6 @@ class Getlrc
     getManPage(url)
     getSong(url)
   end
-
   # 获取所有歌手的链接
   def getManPage(url)
     # 获取a b c d等
@@ -28,7 +26,6 @@ class Getlrc
     rescue
       retry
     end
-
     doc  =  Nokogiri::HTML.parse(html)
     _lastPageUrl = doc.xpath('//*[@id="pageDiv"]/a[7]').attr('href').text
     _lastPageNum = _lastPageUrl[15..._lastPageUrl.length-4].to_i
@@ -56,7 +53,6 @@ class Getlrc
       @manListId.push(str)
     end
   end
-
   # 获取所有歌手的歌曲 json格式
   def getSong(url)
     # 根据歌手列表每个id 获取id的所有歌曲
@@ -73,14 +69,12 @@ class Getlrc
         puts '超时 重新连接'
         retry
       end
-
       totalpage = /totalPage":[\d]+/.match(html_response).to_s.delete('totalPage":')
       #
       page = 1
       while page <= totalpage.to_i do
         uri = "http://www.kuwo.cn/geci/wb/getJsonData?type=artSong&artistId=#{manurl}&page=#{page}"
         html_response = nil
-
         # 处理超时异常
         begin
           open(uri) do |http|
@@ -90,41 +84,21 @@ class Getlrc
           puts '超时 重新连接'
           retry
         end
-
-
         allSongUrl = html_response.scan(/rid":"[\d]+/) #/rid":"[\d]+"/.match(html_response)
         allSongUrl = allSongUrl.map do |item|
           item.delete('rid":"')
         end
-        # 平均分割成不同的份数的多线程
-        _t = 1
-        alltempsongarray = []
-        allSongUrl.each_slice(_t) do |i|
-          puts "--#{i}--"
-          alltempsongarray<<i
-        end
-        alltempsongarray.each do |item|
-          thread = []
-          item.each do |i|
-            thread<< Thread.new do
-                url = "http://www.kuwo.cn/yinyue/#{i}"
-                puts url
-                getOneLyc(url)  
-            end
-          end
-          thread.each do |t|
-            t.join
-          end
+        allSongUrl.each do |item|
+          url = "http://www.kuwo.cn/yinyue/#{item}"
+          getOneLyc(url)
         end
         puts "totalpage #{totalpage}"
         puts "curruntPage #{page}"
         page = page + 1
       end
-
     end
     #
   end
-
 
   # 获取一首歌的歌词 存入数据库 "http://www.kuwo.cn/yinyue/6749207"
   def getOneLyc(url)
@@ -134,7 +108,6 @@ class Getlrc
     insert
     # sleep 1
   end
-
 
   # 解析内容
   # url       :   链接地址
@@ -183,22 +156,20 @@ class Getlrc
       else
         #注意内容中的单引号等符号
         lydata = @data["_lyccontent"].gsub(/['"\\\*&.?!,…:;]/, '')
-        # 根据@database的名字不同 存入不同的数据库
         lydata.split('|').each do |item|
-          puts item
           # 根据@database的名字不同 存入不同的数据库
           SQLite3::Database.new("all.db") do |db|
             db.execute("INSERT INTO lyc ( lycname , album , albumLink , artist , artistLink , lyccontent ) VALUES ('#{@data["_lrcname"]}' , '#{@data["_album"]}' , '#{@data["_albumLink"]}' , '#{@data["_artist"]}' , '#{@data["_artistLink"]}', '#{item}')")
             db.close
           end
         end
+        
       end
     else
       # puts @data["_lyccontent"]
       return
     end
   end
-
 end
 
 # run = Getlrc.new("http://www.kuwo.cn/geci/artist_a.htm")
